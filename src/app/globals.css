@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 200 20% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 200 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 20% 12%;
+
+    /* MediBook teal — clinical, calm, not the usual SaaS blue. */
+    --primary: 175 78% 26%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 176 40% 95%;
+    --secondary-foreground: 175 78% 20%;
+
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 14% 42%;
+
+    --accent: 176 45% 93%;
+    --accent-foreground: 175 78% 20%;
+
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 62% 34%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 46%;
+    --warning-foreground: 30 40% 12%;
+
+    --border: 214 20% 90%;
+    --input: 214 20% 90%;
+    --ring: 175 78% 30%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 200 24% 8%;
+    --foreground: 210 20% 96%;
+
+    --card: 200 22% 11%;
+    --card-foreground: 210 20% 96%;
+
+    --popover: 200 22% 11%;
+    --popover-foreground: 210 20% 96%;
+
+    --primary: 174 62% 44%;
+    --primary-foreground: 200 30% 8%;
+
+    --secondary: 200 18% 17%;
+    --secondary-foreground: 210 20% 96%;
+
+    --muted: 200 18% 16%;
+    --muted-foreground: 215 15% 65%;
+
+    --accent: 200 18% 18%;
+    --accent-foreground: 210 20% 96%;
+
+    --destructive: 0 62% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 52% 44%;
+    --success-foreground: 200 30% 8%;
+
+    --warning: 38 88% 56%;
+    --warning-foreground: 30 40% 10%;
+
+    --border: 200 16% 22%;
+    --input: 200 16% 22%;
+    --ring: 174 62% 46%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Keyboard focus stays visible; mouse focus doesn't add noise. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  ::selection {
+    @apply bg-primary/20;
+  }
+}
+
+@layer components {
+  /* Subtle grid used behind hero sections. */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.55) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.55) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 40%, transparent 100%);
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--muted-foreground) / 0.12) 50%,
+      hsl(var(--muted)) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s infinite;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Print a prescription without the app chrome. */
+  @media print {
+    .print-hide {
+      display: none !important;
+    }
+    .print-full {
+      box-shadow: none !important;
+      border: none !important;
+    }
+  }
+}
+
+/* react-day-picker v9 sizing overrides */
+.rdp-root {
+  --rdp-accent-color: hsl(var(--primary));
+  --rdp-accent-background-color: hsl(var(--accent));
+  --rdp-day-height: 2.25rem;
+  --rdp-day-width: 2.25rem;
+}

@@ -1,0 +1,869 @@
+// MediBook — Doctor Appointment & Patient Records Platform
+// Postgres + Prisma. All money is stored in PKR *paisa-free integers* (whole rupees).
+// All timestamps are stored in UTC; the app renders in Asia/Karachi.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────
+
+enum Role {
+  PATIENT
+  DOCTOR
+  HOSPITAL_ADMIN
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum VerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum ConsultationType {
+  IN_PERSON
+  VIDEO
+  HOME_VISIT
+}
+
+enum AppointmentStatus {
+  PENDING // booked, awaiting doctor/clinic confirmation
+  CONFIRMED
+  CHECKED_IN // patient arrived at clinic
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED_BY_PATIENT
+  CANCELLED_BY_DOCTOR
+  NO_SHOW
+  RESCHEDULED
+}
+
+enum SlotStatus {
+  HELD // temporary reservation during checkout
+  BOOKED
+  BLOCKED // doctor time-off / manual block
+}
+
+enum PaymentMethod {
+  CASH_AT_CLINIC
+  CARD
+  JAZZCASH
+  EASYPAISA
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  UNPAID // pay-at-clinic, not yet collected
+  PENDING // online payment initiated
+  PAID
+  REFUND_PENDING
+  REFUNDED
+  FAILED
+}
+
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+}
+
+enum OtpPurpose {
+  LOGIN
+  PHONE_VERIFY
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+enum FacilityType {
+  HOSPITAL
+  CLINIC
+  DIAGNOSTIC_CENTER
+  PHARMACY
+}
+
+enum MedicalRecordType {
+  LAB_REPORT
+  IMAGING
+  PRESCRIPTION
+  DISCHARGE_SUMMARY
+  VACCINATION
+  INSURANCE
+  OTHER
+}
+
+enum DocumentType {
+  MEDICAL_DEGREE
+  PMDC_CERTIFICATE
+  CNIC
+  SPECIALIZATION_CERT
+  HOSPITAL_LETTER
+  OTHER
+}
+
+enum NotificationType {
+  APPOINTMENT_BOOKED
+  APPOINTMENT_CONFIRMED
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_RESCHEDULED
+  APPOINTMENT_REMINDER
+  FOLLOW_UP_DUE
+  PRESCRIPTION_READY
+  REVIEW_REQUEST
+  PAYMENT_RECEIVED
+  DOCTOR_APPROVED
+  DOCTOR_REJECTED
+  SYSTEM
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum LabOrderStatus {
+  ORDERED
+  SAMPLE_COLLECTED
+  RESULT_READY
+  CANCELLED
+}
+
+// ─────────────────────────────────────────────────────────────
+// AUTH & IDENTITY
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  phone         String?   @unique // E.164, e.g. +923001234567
+  phoneVerified DateTime?
+  passwordHash  String?
+  image         String?
+  role          Role      @default(PATIENT)
+  gender        Gender?
+  dateOfBirth   DateTime?
+  city          String?
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  patientProfile PatientProfile?
+  doctor         Doctor?
+
+  appointments      Appointment[]     @relation("PatientAppointments")
+  reviews           Review[]          @relation("PatientReviews")
+  favorites         Favorite[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]        @relation("ActorAuditLogs")
+  uploadedRecords   MedicalRecord[]   @relation("UploadedRecords")
+  ownedRecords      MedicalRecord[]   @relation("PatientRecords")
+  verifiedDoctors   Doctor[]          @relation("VerifiedByAdmin")
+  cancelledAppts    Appointment[]     @relation("CancelledBy")
+  hospitalAdminOf   HospitalAdmin[]
+  familyMembers     FamilyMember[]
+
+  @@index([role])
+  @@index([createdAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+/// Hashed one-time codes for phone/email OTP and password reset.
+model OtpCode {
+  id         String     @id @default(cuid())
+  identifier String // phone (E.164) or email
+  codeHash   String
+  purpose    OtpPurpose
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int        @default(0)
+  ip         String?
+  createdAt  DateTime   @default(now())
+
+  @@index([identifier, purpose, expiresAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// PATIENT
+// ─────────────────────────────────────────────────────────────
+
+model PatientProfile {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  cnic                  String?  @unique
+  bloodGroup            String?
+  heightCm              Int?
+  weightKg              Int?
+  allergies             String[] @default([])
+  chronicConditions     String[] @default([])
+  currentMedications    String[] @default([])
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  address               String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Book on behalf of family (a real OlaDoc gap — one account, many patients).
+model FamilyMember {
+  id          String    @id @default(cuid())
+  ownerId     String
+  name        String
+  relation    String // Father, Mother, Son, Daughter, Spouse...
+  gender      Gender?
+  dateOfBirth DateTime?
+  phone       String?
+  bloodGroup  String?
+  createdAt   DateTime  @default(now())
+
+  owner        User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([ownerId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// DOCTOR
+// ─────────────────────────────────────────────────────────────
+
+model Specialty {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  slug        String  @unique
+  description String?
+  icon        String?
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  doctors   DoctorSpecialty[]
+  symptoms  Symptom[]
+}
+
+/// Symptom → specialty mapping so patients can search "chest pain" not "cardiology".
+model Symptom {
+  id          String @id @default(cuid())
+  name        String @unique
+  slug        String @unique
+  specialtyId String
+
+  specialty Specialty @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  @@index([specialtyId])
+}
+
+model Doctor {
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  slug               String             @unique
+  pmdcNumber         String             @unique // Pakistan Medical & Dental Council reg. no.
+  bio                String?
+  yearsOfExperience  Int                @default(0)
+  languages          String[]           @default([])
+  verificationStatus VerificationStatus @default(PENDING)
+  verifiedAt         DateTime?
+  verifiedById       String?
+  rejectionReason    String?
+
+  isAcceptingPatients Boolean @default(true)
+  videoConsultEnabled Boolean @default(false)
+  videoConsultFee     Int? // PKR
+  homeVisitEnabled    Boolean @default(false)
+  homeVisitFee        Int?
+
+  // Denormalised aggregates — recomputed on review write. Keeps doctor search fast.
+  avgRating         Float @default(0)
+  reviewCount       Int   @default(0)
+  completedVisits   Int   @default(0)
+  avgWaitMinutes    Int   @default(15)
+  satisfactionScore Int   @default(0) // 0-100, from review sub-scores
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verifiedBy User?   @relation("VerifiedByAdmin", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  specialties   DoctorSpecialty[]
+  educations    DoctorEducation[]
+  experiences   DoctorExperience[]
+  documents     DoctorDocument[]
+  hospitals     DoctorHospital[]
+  schedules     Schedule[]
+  exceptions    ScheduleException[]
+  slots         Slot[]
+  appointments  Appointment[]
+  reviews       Review[]
+  favorites     Favorite[]
+  prescriptions Prescription[]
+  recordShares  MedicalRecordShare[]
+
+  @@index([verificationStatus, isAcceptingPatients])
+  @@index([avgRating])
+}
+
+model DoctorSpecialty {
+  doctorId    String
+  specialtyId String
+  isPrimary   Boolean @default(false)
+
+  doctor    Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  specialty Specialty @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  @@id([doctorId, specialtyId])
+  @@index([specialtyId])
+}
+
+model DoctorEducation {
+  id          String  @id @default(cuid())
+  doctorId    String
+  degree      String // MBBS, FCPS, MD...
+  institute   String
+  year        Int?
+  countryCode String? @default("PK")
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId])
+}
+
+model DoctorExperience {
+  id           String  @id @default(cuid())
+  doctorId     String
+  title        String
+  organization String
+  startYear    Int
+  endYear      Int?
+  isCurrent    Boolean @default(false)
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId])
+}
+
+model DoctorDocument {
+  id         String             @id @default(cuid())
+  doctorId   String
+  type       DocumentType
+  fileUrl    String
+  fileName   String?
+  status     VerificationStatus @default(PENDING)
+  reviewNote String?
+  uploadedAt DateTime           @default(now())
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// HOSPITALS / PRACTICE LOCATIONS
+// ─────────────────────────────────────────────────────────────
+
+model Hospital {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  type        FacilityType @default(HOSPITAL)
+  description String?
+  address     String
+  area        String?
+  city        String
+  province    String?
+  postalCode  String?
+  latitude    Float?
+  longitude   Float?
+  phone       String?
+  email       String?
+  logoUrl     String?
+  coverUrl    String?
+  facilities  String[]     @default([]) // Pharmacy, Lab, ICU, Parking, Wheelchair Access
+  isVerified  Boolean      @default(false)
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  doctors      DoctorHospital[]
+  appointments Appointment[]
+  reviews      Review[]
+  admins       HospitalAdmin[]
+
+  @@index([city])
+  @@index([isActive])
+}
+
+model HospitalAdmin {
+  id         String   @id @default(cuid())
+  userId     String
+  hospitalId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hospital Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hospitalId])
+}
+
+/// A doctor's practice AT a specific hospital: this is where fee & timings live.
+/// The same doctor can charge PKR 3000 at one hospital and PKR 1500 at another.
+model DoctorHospital {
+  id                   String  @id @default(cuid())
+  doctorId             String
+  hospitalId           String
+  consultationFee      Int // PKR
+  followUpFee          Int     @default(0) // 0 = free follow-up
+  followUpValidDays    Int     @default(14)
+  slotDurationMinutes  Int     @default(15)
+  bookingWindowDays    Int     @default(30) // how far ahead patients may book
+  minAdvanceMinutes    Int     @default(60) // no bookings inside this window
+  cancellationHours    Int     @default(4) // free cancellation cutoff
+  roomNumber           String?
+  isActive             Boolean @default(true)
+  acceptsOnlinePayment Boolean @default(true)
+  acceptsCashAtClinic  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor       Doctor              @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  hospital     Hospital            @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  schedules    Schedule[]
+  slots        Slot[]
+  appointments Appointment[]
+  exceptions   ScheduleException[]
+
+  @@unique([doctorId, hospitalId])
+  @@index([hospitalId, isActive])
+  @@index([consultationFee])
+}
+
+/// Recurring weekly availability. dayOfWeek: 0=Sunday … 6=Saturday.
+/// startTime/endTime are local clock strings "HH:mm" in Asia/Karachi.
+model Schedule {
+  id                  String           @id @default(cuid())
+  doctorId            String
+  doctorHospitalId    String
+  dayOfWeek           Int
+  startTime           String
+  endTime             String
+  slotDurationMinutes Int?
+  maxPatients         Int? // token-based clinics: cap per session
+  consultationType    ConsultationType @default(IN_PERSON)
+  isActive            Boolean          @default(true)
+
+  doctor         Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorHospital DoctorHospital @relation(fields: [doctorHospitalId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorHospitalId, dayOfWeek, startTime])
+  @@index([doctorId, dayOfWeek])
+}
+
+/// Leave / one-off closure. If doctorHospitalId is null it applies to ALL locations.
+model ScheduleException {
+  id               String   @id @default(cuid())
+  doctorId         String
+  doctorHospitalId String?
+  date             DateTime @db.Date
+  startTime        String? // null + endTime null => full day off
+  endTime          String?
+  isFullDay        Boolean  @default(true)
+  reason           String?
+  createdAt        DateTime @default(now())
+
+  doctor         Doctor          @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorHospital DoctorHospital? @relation(fields: [doctorHospitalId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, date])
+}
+
+/// A materialised reservation. Rows only exist for HELD / BOOKED / BLOCKED time.
+/// Free availability is COMPUTED from Schedule minus these rows — so the table stays small.
+/// @@unique([doctorId, startAt]) is the hard double-booking guard, enforced by Postgres.
+model Slot {
+  id               String     @id @default(cuid())
+  doctorId         String
+  doctorHospitalId String
+  startAt          DateTime
+  endAt            DateTime
+  status           SlotStatus @default(BOOKED)
+  holdExpiresAt    DateTime? // HELD rows self-expire during checkout
+  createdAt        DateTime   @default(now())
+
+  doctor         Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorHospital DoctorHospital @relation(fields: [doctorHospitalId], references: [id], onDelete: Cascade)
+  appointment    Appointment?
+
+  @@unique([doctorId, startAt])
+  @@index([doctorHospitalId, startAt])
+  @@index([status, holdExpiresAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// APPOINTMENTS
+// ─────────────────────────────────────────────────────────────
+
+model Appointment {
+  id               String            @id @default(cuid())
+  code             String            @unique // human-friendly, e.g. MB-7QK4X2
+  patientId        String
+  familyMemberId   String? // booking for someone else
+  doctorId         String
+  doctorHospitalId String
+  hospitalId       String
+  slotId           String            @unique
+  scheduledAt      DateTime
+  endAt            DateTime
+  tokenNumber      Int? // queue position for token-based clinics
+  consultationType ConsultationType  @default(IN_PERSON)
+  status           AppointmentStatus @default(PENDING)
+
+  reasonForVisit String?
+  patientNotes   String?
+  videoRoomUrl   String?
+
+  // Follow-up chain
+  isFollowUp          Boolean @default(false)
+  parentAppointmentId String?
+
+  fee Int // PKR actually charged (follow-ups may be 0)
+
+  checkedInAt        DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancellationReason String?
+  rescheduledFromId  String? @unique
+
+  reminderSentAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  patient        User            @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
+  familyMember   FamilyMember?   @relation(fields: [familyMemberId], references: [id], onDelete: SetNull)
+  doctor         Doctor          @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorHospital DoctorHospital  @relation(fields: [doctorHospitalId], references: [id], onDelete: Cascade)
+  hospital       Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  slot           Slot            @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  cancelledBy    User?           @relation("CancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+
+  parentAppointment Appointment?  @relation("FollowUpChain", fields: [parentAppointmentId], references: [id], onDelete: SetNull)
+  followUps         Appointment[] @relation("FollowUpChain")
+
+  rescheduledFrom Appointment? @relation("Reschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
+  rescheduledTo   Appointment? @relation("Reschedule")
+
+  consultation Consultation?
+  payment      Payment?
+  review       Review?
+  records      MedicalRecord[]
+
+  @@index([patientId, scheduledAt])
+  @@index([doctorId, scheduledAt])
+  @@index([status, scheduledAt])
+  @@index([hospitalId, scheduledAt])
+}
+
+/// The clinical encounter — filled in by the doctor. One per completed appointment.
+model Consultation {
+  id            String  @id @default(cuid())
+  appointmentId String  @unique
+  chiefComplaint String?
+  historyOfIllness String?
+  examination    String?
+  diagnosis      String?
+  clinicalNotes  String?
+  advice         String?
+
+  // Vitals
+  bloodPressure String? // "120/80"
+  pulseBpm      Int?
+  temperatureC  Float?
+  spo2          Int?
+  weightKg      Float?
+  heightCm      Float?
+  bloodSugar    Float?
+
+  // Follow-up planning — the source of the follow-up reminder system
+  followUpAfterDays Int?
+  followUpDate      DateTime?
+  followUpReason    String?
+  followUpBookedId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment  Appointment   @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  prescription Prescription?
+  labOrders    LabOrder[]
+
+  @@index([followUpDate])
+}
+
+model Prescription {
+  id             String   @id @default(cuid())
+  consultationId String   @unique
+  doctorId       String
+  patientId      String
+  code           String   @unique
+  notes          String?
+  issuedAt       DateTime @default(now())
+
+  consultation Consultation       @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  doctor       Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  items        PrescriptionItem[]
+
+  @@index([patientId])
+  @@index([doctorId])
+}
+
+model PrescriptionItem {
+  id             String  @id @default(cuid())
+  prescriptionId String
+  drugName       String
+  strength       String? // "500mg"
+  form           String? // Tablet, Syrup, Injection
+  dosage         String? // "1 tablet"
+  frequency      String? // "TDS (3x daily)"
+  durationDays   Int?
+  instructions   String? // "After meals"
+  sortOrder      Int     @default(0)
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+}
+
+model LabOrder {
+  id             String         @id @default(cuid())
+  consultationId String
+  testName       String
+  instructions   String?
+  status         LabOrderStatus @default(ORDERED)
+  orderedAt      DateTime       @default(now())
+  resultText     String?
+  resultFileUrl  String?
+  reportedAt     DateTime?
+
+  consultation Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+
+  @@index([consultationId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// PATIENT RECORDS (patient-owned, explicitly shared)
+// ─────────────────────────────────────────────────────────────
+
+model MedicalRecord {
+  id            String            @id @default(cuid())
+  patientId     String
+  uploadedById  String
+  appointmentId String?
+  title         String
+  type          MedicalRecordType @default(OTHER)
+  fileUrl       String?
+  fileName      String?
+  fileType      String?
+  fileSizeBytes Int?
+  notes         String?
+  recordDate    DateTime          @default(now())
+  createdAt     DateTime          @default(now())
+
+  patient      User                 @relation("PatientRecords", fields: [patientId], references: [id], onDelete: Cascade)
+  uploadedBy   User                 @relation("UploadedRecords", fields: [uploadedById], references: [id], onDelete: Cascade)
+  appointment  Appointment?         @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  shares       MedicalRecordShare[]
+
+  @@index([patientId, recordDate])
+}
+
+/// Explicit, revocable, time-boxed consent. A doctor sees a record only via a share.
+model MedicalRecordShare {
+  id        String    @id @default(cuid())
+  recordId  String
+  doctorId  String
+  sharedAt  DateTime  @default(now())
+  expiresAt DateTime?
+  revokedAt DateTime?
+
+  record MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  doctor Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([recordId, doctorId])
+  @@index([doctorId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// MONEY
+// ─────────────────────────────────────────────────────────────
+
+model Payment {
+  id            String        @id @default(cuid())
+  appointmentId String        @unique
+  amount        Int // PKR
+  platformFee   Int           @default(0)
+  currency      String        @default("PKR")
+  method        PaymentMethod
+  status        PaymentStatus @default(UNPAID)
+  provider      String? // "jazzcash" | "easypaisa" | "stripe"
+  providerRef   String? // gateway transaction id
+  paidAt        DateTime?
+  refundedAt    DateTime?
+  refundAmount  Int?
+  failureReason String?
+  receiptUrl    String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([providerRef])
+}
+
+// ─────────────────────────────────────────────────────────────
+// REVIEWS
+// ─────────────────────────────────────────────────────────────
+
+/// One review per completed appointment — verified-visit-only, which is what makes
+/// the rating trustworthy. Sub-scores feed the doctor's satisfaction score.
+model Review {
+  id            String       @id @default(cuid())
+  appointmentId String       @unique
+  patientId     String
+  doctorId      String
+  hospitalId    String?
+  rating        Int // 1..5 overall
+  bedsideManner Int? // 1..5
+  waitTimeScore Int? // 1..5
+  explanation   Int? // 1..5 — how well the doctor explained
+  cleanliness   Int? // 1..5 — facility
+  title         String?
+  comment       String?
+  isAnonymous   Boolean      @default(false)
+  status        ReviewStatus @default(PUBLISHED)
+  moderationNote String?
+  doctorReply   String?
+  doctorRepliedAt DateTime?
+  helpfulCount  Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patient     User        @relation("PatientReviews", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor      @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  hospital    Hospital?   @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+
+  @@index([doctorId, status, createdAt])
+  @@index([patientId])
+}
+
+model Favorite {
+  userId    String
+  doctorId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@id([userId, doctorId])
+  @@index([doctorId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// PLATFORM
+// ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  type      NotificationType
+  channel   NotificationChannel @default(IN_APP)
+  title     String
+  body      String
+  actionUrl String?
+  data      Json?
+  readAt    DateTime?
+  sentAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String // "appointment.cancel", "doctor.approve", ...
+  entity    String
+  entityId  String?
+  meta      Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  actor User? @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([actorId, createdAt])
+}
