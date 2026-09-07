@@ -180,7 +180,7 @@ export async function setUserRoleAction(
 
 export async function refundPaymentAction(paymentId: string, amount?: number): Promise<ActionResult> {
   try {
-    const admin = await requirePermission("analytics.platform");
+    const admin = await requirePermission("payment.refund");
     await processRefund({ paymentId, actorId: admin.id, amount });
     revalidatePath("/admin/payments");
     return { ok: true, data: undefined, message: "Refund recorded." };

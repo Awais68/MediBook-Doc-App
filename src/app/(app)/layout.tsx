@@ -1,23 +1,14 @@
-import {
-  Bell,
-  CalendarDays,
-  FileText,
-  Home,
-  Pill,
-  Settings,
-  Users,
-} from "lucide-react";
 import { SiteHeader } from "@/components/layout/site-header";
 import { AppNav, type NavItem } from "@/components/app/app-nav";
 
 const PATIENT_NAV: NavItem[] = [
-  { href: "/dashboard", label: "Overview", icon: Home },
-  { href: "/appointments", label: "Appointments", icon: CalendarDays },
-  { href: "/records", label: "Medical records", icon: FileText },
-  { href: "/prescriptions", label: "Prescriptions", icon: Pill },
-  { href: "/family", label: "Family", icon: Users },
-  { href: "/notifications", label: "Notifications", icon: Bell },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard", label: "Overview", icon: "home" },
+  { href: "/appointments", label: "Appointments", icon: "calendar" },
+  { href: "/records", label: "Medical records", icon: "file" },
+  { href: "/prescriptions", label: "Prescriptions", icon: "pill" },
+  { href: "/family", label: "Family", icon: "users" },
+  { href: "/notifications", label: "Notifications", icon: "bell" },
+  { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

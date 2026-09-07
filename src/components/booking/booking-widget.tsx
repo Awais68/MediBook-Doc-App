@@ -77,12 +77,22 @@ export function BookingWidget({
 
   const practice = practices.find((p) => p.id === practiceId) ?? practices[0];
 
+  // Changing location invalidates the calendar and the payment default. React's
+  // documented way to do that is to adjust state during render, not in an effect.
+  const [syncedPracticeId, setSyncedPracticeId] = React.useState(practiceId);
+  if (practiceId !== syncedPracticeId) {
+    setSyncedPracticeId(practiceId);
+    setLoading(true);
+    setSelectedSlot(null);
+    if (practice) {
+      setPaymentMethod(practice.acceptsCashAtClinic ? "CASH_AT_CLINIC" : "JAZZCASH");
+    }
+  }
+
   // Availability is derived server-side, so it is always re-fetched per location.
   React.useEffect(() => {
     if (!practiceId) return;
     let cancelled = false;
-    setLoading(true);
-    setSelectedSlot(null);
 
     loadAvailabilityAction(practiceId, 28).then((res) => {
       if (cancelled) return;
@@ -108,12 +118,6 @@ export function BookingWidget({
       if (res.ok) setFamily(res.data);
     });
   }, [isSignedIn]);
-
-  React.useEffect(() => {
-    if (!practice) return;
-    // Default to whatever the clinic actually accepts.
-    setPaymentMethod(practice.acceptsCashAtClinic ? "CASH_AT_CLINIC" : "JAZZCASH");
-  }, [practice]);
 
   const visibleDays = React.useMemo(
     () => (days ?? []).slice(weekOffset * DAYS_PER_PAGE, weekOffset * DAYS_PER_PAGE + DAYS_PER_PAGE),

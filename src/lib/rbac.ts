@@ -19,6 +19,7 @@ export const PERMISSIONS = {
   "hospital.manage": ["ADMIN", "HOSPITAL_ADMIN"],
   "specialty.manage": ["ADMIN"],
   "user.manage": ["ADMIN"],
+  "payment.refund": ["ADMIN"],
   "analytics.platform": ["ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 

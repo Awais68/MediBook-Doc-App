@@ -20,6 +20,7 @@ const ROUTE_GUARDS: { prefix: string; roles: string[] }[] = [
   { prefix: "/book", roles: ["PATIENT", "ADMIN", "HOSPITAL_ADMIN"] },
   { prefix: "/settings", roles: ["PATIENT", "DOCTOR", "ADMIN", "HOSPITAL_ADMIN"] },
   { prefix: "/apply", roles: ["PATIENT", "DOCTOR", "ADMIN"] },
+  { prefix: "/onboarding", roles: ["PATIENT", "DOCTOR", "ADMIN", "HOSPITAL_ADMIN"] },
 ];
 
 export function guardFor(pathname: string) {

@@ -8,6 +8,20 @@ import { dateKey, addMinutes } from "@/lib/time";
 import { notify } from "@/lib/notifications";
 import { audit } from "@/lib/audit";
 
+/**
+ * Platform commission on online payments, in percent of the consultation fee.
+ * Cash collected at the clinic never passes through us, so it carries none.
+ */
+export const PLATFORM_FEE_PERCENT = Number(process.env.PLATFORM_FEE_PERCENT ?? 0);
+
+export function platformFeeFor(amount: number, method: PaymentMethod) {
+  if (method === "CASH_AT_CLINIC" || amount <= 0) return 0;
+  return Math.round((amount * PLATFORM_FEE_PERCENT) / 100);
+}
+
+/** How long an unpaid online booking may sit on a slot before it is released. */
+export const UNPAID_BOOKING_TTL_MINUTES = Number(process.env.UNPAID_BOOKING_TTL_MINUTES ?? 20);
+
 /** Statuses that still occupy the doctor's calendar. */
 export const ACTIVE_STATUSES: AppointmentStatus[] = [
   "PENDING",
@@ -201,6 +215,7 @@ export async function bookAppointment(input: BookInput) {
           payment: {
             create: {
               amount: fee,
+              platformFee: platformFeeFor(fee, input.paymentMethod),
               method: input.paymentMethod,
               // Online payments start PENDING and are settled by the gateway callback.
               status: fee === 0 ? "PAID" : isOnline ? "PENDING" : "UNPAID",
@@ -552,4 +567,61 @@ export async function transitionAppointment(opts: {
   });
 
   return updated;
+}
+
+/**
+ * An online booking occupies its slot the moment it is created, so an abandoned
+ * checkout would block that time forever. This expires those: the appointment is
+ * cancelled, the payment is marked failed and the slot is freed for someone else.
+ */
+export async function expireUnpaidBookings(minutes = UNPAID_BOOKING_TTL_MINUTES) {
+  const cutoff = new Date(Date.now() - minutes * 60_000);
+
+  const stale = await prisma.appointment.findMany({
+    where: {
+      status: "PENDING",
+      createdAt: { lt: cutoff },
+      scheduledAt: { gt: new Date() },
+      payment: { is: { status: { in: ["PENDING", "FAILED"] }, method: { not: "CASH_AT_CLINIC" } } },
+    },
+    select: { id: true, code: true, slotId: true, patientId: true, payment: { select: { id: true } } },
+  });
+
+  for (const appt of stale) {
+    await prisma.$transaction(async (tx) => {
+      await tx.appointment.update({
+        where: { id: appt.id },
+        data: {
+          status: "CANCELLED_BY_PATIENT",
+          cancelledAt: new Date(),
+          cancellationReason: "Payment not completed in time.",
+        },
+      });
+      if (appt.payment) {
+        await tx.payment.update({
+          where: { id: appt.payment.id },
+          data: { status: "FAILED", failureReason: "Checkout abandoned." },
+        });
+      }
+      await tx.slot.delete({ where: { id: appt.slotId } }).catch(() => undefined);
+    });
+
+    await Promise.allSettled([
+      notify({
+        userId: appt.patientId,
+        type: "APPOINTMENT_CANCELLED",
+        title: `Booking ${appt.code} released`,
+        body: "We couldn't confirm your payment, so the slot has been released. Please book again.",
+        actionUrl: "/appointments",
+      }),
+      audit({
+        actorId: appt.patientId,
+        action: "appointment.expire_unpaid",
+        entity: "Appointment",
+        entityId: appt.id,
+      }),
+    ]);
+  }
+
+  return stale.length;
 }

@@ -162,7 +162,7 @@ export default async function HomePage() {
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Built to fix what booking apps get wrong</h2>
             <p className="mt-3 text-muted-foreground">
-              Most platforms stop at "request an appointment". This one handles the whole visit — and everything after it.
+              Most platforms stop at &ldquo;request an appointment&rdquo;. This one handles the whole visit — and everything after it.
             </p>
           </div>
 
