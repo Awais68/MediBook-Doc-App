@@ -48,6 +48,9 @@ function verifySignature(provider: string, req: Request, raw: string): boolean {
       // Stripe's scheme: t=<ts>,v1=<hmac of "<ts>.<body>">
       const parts = Object.fromEntries(header.split(",").map((p) => p.split("=") as [string, string]));
       if (!parts.t || !parts.v1) return false;
+      // Reject stale signatures so a captured webhook can't be replayed later.
+      const ageSeconds = Math.abs(Date.now() / 1000 - Number(parts.t));
+      if (!Number.isFinite(ageSeconds) || ageSeconds > 300) return false;
       const expected = crypto.createHmac("sha256", secret).update(`${parts.t}.${raw}`).digest("hex");
       return timingSafeEqual(expected, parts.v1);
     }

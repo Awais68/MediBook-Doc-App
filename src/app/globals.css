@@ -39,6 +39,9 @@
     --input: 214 20% 90%;
     --ring: 175 78% 30%;
 
+    /* Hue used by tinted shadows (teal-navy, never pure black). */
+    --shadow: 190 40% 18%;
+
     --radius: 0.75rem;
   }
 
@@ -76,6 +79,8 @@
     --border: 200 16% 22%;
     --input: 200 16% 22%;
     --ring: 174 62% 46%;
+
+    --shadow: 200 40% 2%;
   }
 }
 
@@ -91,7 +96,22 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 
   /* Keyboard focus stays visible; mouse focus doesn't add noise. */
@@ -112,6 +132,38 @@
       linear-gradient(to bottom, hsl(var(--border) / 0.55) 1px, transparent 1px);
     background-size: 44px 44px;
     mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 40%, transparent 100%);
+  }
+
+  /* Ambient teal glow for hero / CTA backgrounds. */
+  .bg-glow {
+    background-image:
+      radial-gradient(60% 50% at 8% 0%, hsl(var(--primary) / 0.16), transparent 70%),
+      radial-gradient(45% 45% at 92% 20%, hsl(var(--primary) / 0.10), transparent 70%),
+      radial-gradient(50% 40% at 50% 100%, hsl(var(--accent) / 0.9), transparent 70%);
+  }
+
+  /* Film grain to break flat gradients. Pointer-events off, sits inside a relative parent. */
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .dark .grain::after {
+    mix-blend-mode: screen;
+    opacity: 0.25;
+  }
+
+  /* Interactive card: lifts on hover, settles on press. */
+  .card-lift {
+    @apply transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lift active:translate-y-0 active:shadow-soft;
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary;
   }
 
   .shimmer {

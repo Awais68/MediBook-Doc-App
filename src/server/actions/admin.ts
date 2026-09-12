@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/session";
 import { toActionError, notFound, invalid, type ActionResult } from "@/lib/errors";
-import { hospitalSchema } from "@/lib/validations";
+import { hospitalSchema, specialtySchema, refundAmountSchema } from "@/lib/validations";
 import { slugify } from "@/lib/utils";
 import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
@@ -120,11 +120,12 @@ export async function toggleHospitalAction(id: string, isActive: boolean): Promi
 }
 
 export async function upsertSpecialtyAction(
-  data: { name: string; description?: string; icon?: string; sortOrder?: number },
+  raw: { name: string; description?: string; icon?: string; sortOrder?: number },
   id?: string,
 ): Promise<ActionResult> {
   try {
     await requirePermission("specialty.manage");
+    const data = specialtySchema.parse(raw);
     if (id) {
       await prisma.specialty.update({ where: { id }, data });
     } else {
@@ -181,7 +182,7 @@ export async function setUserRoleAction(
 export async function refundPaymentAction(paymentId: string, amount?: number): Promise<ActionResult> {
   try {
     const admin = await requirePermission("payment.refund");
-    await processRefund({ paymentId, actorId: admin.id, amount });
+    await processRefund({ paymentId, actorId: admin.id, amount: refundAmountSchema.parse(amount) });
     revalidatePath("/admin/payments");
     return { ok: true, data: undefined, message: "Refund recorded." };
   } catch (e) {

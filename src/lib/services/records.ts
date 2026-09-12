@@ -107,7 +107,11 @@ export async function getPatientChartForDoctor(doctorId: string, patientId: stri
       where: {
         patientId,
         OR: [
-          { shares: { some: { doctorId, revokedAt: null } } },
+          {
+            shares: {
+              some: { doctorId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+            },
+          },
           { uploadedBy: { doctor: { id: doctorId } } },
         ],
       },

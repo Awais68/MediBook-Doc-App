@@ -394,6 +394,9 @@ export async function rescheduleAppointment(opts: {
     where: { id: targetDhId },
     select: { id: true, doctorId: true, hospitalId: true, slotDurationMinutes: true },
   });
+  // A reschedule moves the visit to another location of the SAME doctor — never
+  // to a different doctor (that would be a new booking with a new fee).
+  if (dh.doctorId !== appt.doctorId) throw invalid("You can only reschedule with the same doctor.");
   const endAt = addMinutes(opts.newStartAt, dh.slotDurationMinutes);
 
   try {
@@ -402,6 +405,11 @@ export async function rescheduleAppointment(opts: {
         where: { id: appt.id },
         data: { status: "RESCHEDULED" },
       });
+      // The provider reference moves to the new payment row; leaving it on the
+      // old one would let a webhook replay settle the stale appointment.
+      if (appt.payment?.providerRef) {
+        await tx.payment.update({ where: { id: appt.payment.id }, data: { providerRef: null } });
+      }
       await tx.slot.delete({ where: { id: appt.slotId } }).catch(() => undefined);
 
       const slot = await tx.slot.create({

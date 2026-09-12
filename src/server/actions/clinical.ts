@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireDoctor, requireUser, requirePermission } from "@/lib/session";
 import { toActionError, forbidden, type ActionResult } from "@/lib/errors";
-import { consultationSchema, reviewSchema } from "@/lib/validations";
+import { consultationSchema, reviewSchema, reviewReplySchema, labResultUpdateSchema } from "@/lib/validations";
 import { saveConsultation } from "@/lib/services/consultation";
 import { createReview, replyToReview, moderateReview } from "@/lib/services/reviews";
 
@@ -45,7 +45,7 @@ export async function createReviewAction(raw: unknown): Promise<ActionResult> {
 export async function replyToReviewAction(reviewId: string, reply: string): Promise<ActionResult> {
   try {
     const user = await requirePermission("review.reply");
-    await replyToReview({ reviewId, doctorUserId: user.id, reply });
+    await replyToReview({ reviewId, doctorUserId: user.id, reply: reviewReplySchema.parse(reply) });
     revalidatePath("/doctor/reviews");
     return { ok: true, data: undefined, message: "Reply posted." };
   } catch (e) {
@@ -80,10 +80,11 @@ export async function markHelpfulAction(reviewId: string): Promise<ActionResult>
 
 export async function updateLabResultAction(
   labOrderId: string,
-  data: { status?: "ORDERED" | "SAMPLE_COLLECTED" | "RESULT_READY" | "CANCELLED"; resultText?: string },
+  input: { status?: "ORDERED" | "SAMPLE_COLLECTED" | "RESULT_READY" | "CANCELLED"; resultText?: string },
 ): Promise<ActionResult> {
   try {
     const { doctor } = await requireDoctor();
+    const data = labResultUpdateSchema.parse(input);
     const order = await prisma.labOrder.findUnique({
       where: { id: labOrderId },
       select: { consultation: { select: { appointment: { select: { doctorId: true, id: true } } } } },

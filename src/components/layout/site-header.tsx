@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/layout/logo";
 import { UserMenu } from "@/components/layout/user-menu";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { NavLinks } from "@/components/layout/nav-links";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { prisma } from "@/lib/prisma";
@@ -22,24 +23,13 @@ export async function SiteHeader() {
     : 0;
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+    <header className="sticky top-0 z-40 w-full border-b border-border/70 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/65">
       <div className="container flex h-16 items-center gap-3">
         <MobileNav links={NAV} />
         <Logo />
+        <NavLinks links={NAV} />
 
-        <nav className="ml-6 hidden items-center gap-1 md:flex">
-          {NAV.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              {l.label}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1.5">
           <ThemeToggle />
           {user ? (
             <>
@@ -51,7 +41,7 @@ export async function SiteHeader() {
               <Button variant="ghost" asChild className="hidden sm:inline-flex">
                 <Link href="/login">Sign in</Link>
               </Button>
-              <Button asChild>
+              <Button asChild className="rounded-full px-5">
                 <Link href="/register">Get started</Link>
               </Button>
             </>

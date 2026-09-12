@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { toActionError, forbidden, type ActionResult } from "@/lib/errors";
-import { patientProfileSchema, familyMemberSchema, medicalRecordSchema } from "@/lib/validations";
+import { patientProfileSchema, familyMemberSchema, medicalRecordSchema, shareDaysSchema } from "@/lib/validations";
 import { shareRecordWithDoctor, revokeRecordShare } from "@/lib/services/records";
 
 export async function updatePatientProfileAction(raw: unknown): Promise<ActionResult> {
@@ -134,7 +134,7 @@ export async function deleteMedicalRecordAction(id: string): Promise<ActionResul
 export async function shareRecordAction(recordId: string, doctorId: string, days?: number) {
   try {
     const user = await requireUser();
-    await shareRecordWithDoctor({ recordId, patientId: user.id, doctorId, expiresInDays: days });
+    await shareRecordWithDoctor({ recordId, patientId: user.id, doctorId, expiresInDays: shareDaysSchema.parse(days) });
     revalidatePath("/records");
     return { ok: true as const, data: undefined, message: "Shared with your doctor." };
   } catch (e) {

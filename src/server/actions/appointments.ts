@@ -128,10 +128,16 @@ export async function completeMockPaymentAction(
   success: boolean,
 ): Promise<ActionResult> {
   try {
-    await requireUser();
+    const user = await requireUser();
     if ((process.env.PAYMENT_PROVIDER ?? "mock") !== "mock") {
       return { ok: false, error: "Mock checkout is disabled." };
     }
+    // Only the patient who owns the booking may settle its sandbox payment.
+    const owned = await prisma.payment.findFirst({
+      where: { providerRef, appointment: { patientId: user.id } },
+      select: { id: true },
+    });
+    if (!owned) return { ok: false, error: "Payment not found." };
     await settlePayment({ providerRef, success, failureReason: success ? undefined : "Declined in sandbox" });
     revalidatePath("/appointments");
     return {

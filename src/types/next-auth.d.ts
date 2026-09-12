@@ -18,5 +18,7 @@ declare module "@auth/core/jwt" {
     role: Role;
     doctorId?: string | null;
     phone?: string | null;
+    /** Last time the token was re-validated against the users table (ms epoch). */
+    checkedAt?: number;
   }
 }

@@ -2,6 +2,16 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/providers/sms";
 import { sendEmail, emailLayout } from "@/lib/providers/email";
+
+/** Notification bodies interpolate user-authored text (names, reasons); never trust them as HTML. */
+function escapeHtml(s: string) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 import type { NotificationType } from "@prisma/client";
 
 type NotifyInput = {
@@ -49,8 +59,8 @@ export async function notify(input: NotifyInput) {
           to: user.email,
           subject: input.title,
           html: emailLayout(
-            input.title,
-            `<p>${input.body}</p>`,
+            escapeHtml(input.title),
+            `<p>${escapeHtml(input.body)}</p>`,
             input.actionUrl ? { label: "Open MediBook", url: `${base}${input.actionUrl}` } : undefined,
           ),
           text: input.body,

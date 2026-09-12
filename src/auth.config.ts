@@ -18,6 +18,7 @@ const ROUTE_GUARDS: { prefix: string; roles: string[] }[] = [
   { prefix: "/prescriptions", roles: ["PATIENT", "ADMIN"] },
   { prefix: "/family", roles: ["PATIENT", "ADMIN"] },
   { prefix: "/book", roles: ["PATIENT", "ADMIN", "HOSPITAL_ADMIN"] },
+  { prefix: "/checkout", roles: ["PATIENT", "ADMIN", "HOSPITAL_ADMIN"] },
   { prefix: "/settings", roles: ["PATIENT", "DOCTOR", "ADMIN", "HOSPITAL_ADMIN"] },
   { prefix: "/apply", roles: ["PATIENT", "DOCTOR", "ADMIN"] },
   { prefix: "/onboarding", roles: ["PATIENT", "DOCTOR", "ADMIN", "HOSPITAL_ADMIN"] },
@@ -35,7 +36,11 @@ export const authConfig = {
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      allowDangerousEmailAccountLinking: true,
+      // Registration does not verify email ownership, so auto-linking a Google
+      // login to an existing email would let anyone take over a password account
+      // by registering its address first. The login form explains
+      // OAuthAccountNotLinked to the user instead.
+      allowDangerousEmailAccountLinking: false,
     }),
   ],
   callbacks: {

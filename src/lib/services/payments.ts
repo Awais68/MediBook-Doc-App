@@ -138,12 +138,17 @@ export async function processRefund(opts: { paymentId: string; actorId: string; 
     throw invalid("Only a settled payment can be refunded.");
   }
 
+  const amount = opts.amount ?? payment.amount;
+  if (!Number.isInteger(amount) || amount <= 0 || amount > payment.amount) {
+    throw invalid("Refund amount must be between 1 and the amount paid.");
+  }
+
   const updated = await prisma.payment.update({
     where: { id: payment.id },
     data: {
       status: "REFUNDED",
       refundedAt: new Date(),
-      refundAmount: opts.amount ?? payment.amount,
+      refundAmount: amount,
     },
   });
   await audit({

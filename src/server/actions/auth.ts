@@ -84,7 +84,8 @@ export async function forgotPasswordAction(raw: unknown): Promise<ActionResult<{
     const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
     // Always report success — never confirm whether an email is registered.
     if (user) {
-      await issueOtp({ identifier: email, purpose: "PASSWORD_RESET", channel: "email" });
+      // A rate-limit error here would confirm the address exists; swallow it.
+      await issueOtp({ identifier: email, purpose: "PASSWORD_RESET", channel: "email" }).catch(() => undefined);
     }
     return {
       ok: true,

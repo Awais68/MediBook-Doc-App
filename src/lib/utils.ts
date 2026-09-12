@@ -72,7 +72,10 @@ export function slugify(input: string) {
 export function generateCode(prefix = "MB") {
   const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // no 0/O/1/I
   let out = "";
-  for (let i = 0; i < 6; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  // Math.random is predictable; Web Crypto is available in Node and browsers.
+  // 256 % 32 === 0, so `byte % 32` is unbiased.
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(6));
+  for (const b of bytes) out += alphabet[b % alphabet.length];
   return `${prefix}-${out}`;
 }
 

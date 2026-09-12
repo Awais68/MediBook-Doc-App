@@ -7,6 +7,9 @@ import { authConfig } from "@/auth.config";
 import { verifyOtp } from "@/lib/otp";
 import { normalizePhone } from "@/lib/utils";
 
+/** How often a JWT session is re-checked against the DB for suspension / role changes. */
+const SESSION_RECHECK_MS = 5 * 60 * 1000;
+
 /** Loads the fields the session needs, in one query. */
 async function loadSessionUser(userId: string) {
   return prisma.user.findUnique({
@@ -127,16 +130,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.doctorId = (user as any).doctorId ?? null;
       }
       // Roles change (patient → doctor after approval, or an admin suspension).
-      // Re-read on explicit session.update() so the user never has to re-login.
-      if (trigger === "update" && token.id) {
+      // JWT sessions never touch the DB on their own, so re-read on explicit
+      // session.update() AND every few minutes — otherwise a suspended user
+      // keeps a working session for up to 30 days.
+      const now = Date.now();
+      const checkedAt = typeof token.checkedAt === "number" ? token.checkedAt : 0;
+      const stale = now - checkedAt > SESSION_RECHECK_MS;
+      if (user) token.checkedAt = now;
+      else if (token.id && (trigger === "update" || stale)) {
         const fresh = await loadSessionUser(token.id);
-        if (fresh) {
-          token.role = fresh.role;
-          token.name = fresh.name;
-          token.picture = fresh.image;
-          token.phone = fresh.phone;
-          token.doctorId = fresh.doctor?.id ?? null;
-        }
+        if (!fresh || !fresh.isActive) return null; // invalidates the session cookie
+        token.role = fresh.role;
+        token.name = fresh.name;
+        token.picture = fresh.image;
+        token.phone = fresh.phone;
+        token.doctorId = fresh.doctor?.id ?? null;
+        token.checkedAt = now;
       }
       return token;
     },

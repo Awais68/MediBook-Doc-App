@@ -68,7 +68,7 @@ export default async function FamilyPage() {
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {m.bloodGroup ? <Badge variant="outline">{m.bloodGroup}</Badge> : null}
                       <Badge variant="secondary">
-                        {m._count.appointments} {pluralize(m._count.appointments, "visit")}
+                        {pluralize(m._count.appointments, "visit")}
                       </Badge>
                     </div>
                   </div>

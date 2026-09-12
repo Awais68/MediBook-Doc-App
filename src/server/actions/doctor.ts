@@ -5,7 +5,13 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireDoctor } from "@/lib/session";
 import { toActionError, conflict, invalid, forbidden, type ActionResult } from "@/lib/errors";
-import { doctorApplicationSchema, scheduleSchema, timeOffSchema } from "@/lib/validations";
+import {
+  doctorApplicationSchema,
+  doctorProfileUpdateSchema,
+  practiceSchema,
+  scheduleSchema,
+  timeOffSchema,
+} from "@/lib/validations";
 import { slugify } from "@/lib/utils";
 import { timeToMinutes, zonedDateTime } from "@/lib/time";
 import { audit } from "@/lib/audit";
@@ -100,7 +106,7 @@ export async function applyAsDoctorAction(raw: unknown): Promise<ActionResult<{ 
   }
 }
 
-export async function updateDoctorProfileAction(raw: {
+export async function updateDoctorProfileAction(input: {
   bio?: string;
   yearsOfExperience?: number;
   languages?: string[];
@@ -111,6 +117,7 @@ export async function updateDoctorProfileAction(raw: {
 }): Promise<ActionResult> {
   try {
     const { doctor } = await requireDoctor();
+    const raw = doctorProfileUpdateSchema.parse(input);
     await prisma.doctor.update({
       where: { id: doctor.id },
       data: {
@@ -131,7 +138,7 @@ export async function updateDoctorProfileAction(raw: {
   }
 }
 
-export async function upsertPracticeAction(raw: {
+export async function upsertPracticeAction(input: {
   id?: string;
   hospitalId: string;
   consultationFee: number;
@@ -145,6 +152,9 @@ export async function upsertPracticeAction(raw: {
 }): Promise<ActionResult> {
   try {
     const { doctor } = await requireDoctor();
+    // Parse before spreading into Prisma: otherwise any extra key (doctorId,
+    // ratings…) sent by a tampered client lands in the row.
+    const raw = practiceSchema.parse(input);
     if (!raw.acceptsCashAtClinic && !raw.acceptsOnlinePayment) {
       throw invalid("Enable at least one payment method for this location.");
     }
@@ -230,7 +240,7 @@ export async function deleteScheduleAction(id: string): Promise<ActionResult> {
 
 export async function addTimeOffAction(raw: unknown): Promise<ActionResult<{ affected: number }>> {
   try {
-    const { doctor } = await requireDoctor();
+    const { user, doctor } = await requireDoctor();
     const d = timeOffSchema.parse(raw);
 
     const exception = await prisma.scheduleException.create({
@@ -272,7 +282,7 @@ export async function addTimeOffAction(raw: unknown): Promise<ActionResult<{ aff
     );
 
     await audit({
-      actorId: doctor.id,
+      actorId: user.id, // AuditLog.actorId references User, not Doctor
       action: "doctor.time_off",
       entity: "ScheduleException",
       entityId: exception.id,

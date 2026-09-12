@@ -125,7 +125,11 @@ export default async function DoctorProfilePage({ params, searchParams }: Props)
 
   return (
     <div className="container py-8">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      {/* Escape "<" so a "</script>" in any user-authored field can't break out of the tag. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+      />
 
       <nav className="mb-6 text-sm text-muted-foreground">
         <Link href="/doctors" className="hover:text-foreground">

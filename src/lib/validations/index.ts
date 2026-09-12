@@ -235,7 +235,14 @@ export const medicalRecordSchema = z.object({
   ]),
   recordDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   notes: z.string().max(1000).optional(),
-  fileUrl: z.string().max(500).optional().or(z.literal("")),
+  // Rendered as an <a href>; restrict to http(s) so a stored `javascript:` URI
+  // can never reach a doctor's browser.
+  fileUrl: z
+    .string()
+    .max(500)
+    .refine((v) => /^https?:\/\/\S+$/i.test(v), "File link must start with http:// or https://")
+    .optional()
+    .or(z.literal("")),
   fileName: z.string().max(200).optional(),
 });
 
@@ -253,6 +260,47 @@ export const hospitalSchema = z.object({
   latitude: z.coerce.number().min(-90).max(90).optional(),
   longitude: z.coerce.number().min(-180).max(180).optional(),
 });
+
+export const specialtySchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(500).optional(),
+  icon: z.string().trim().max(40).optional(),
+  sortOrder: z.coerce.number().int().min(0).max(999).optional(),
+});
+
+export const doctorProfileUpdateSchema = z.object({
+  bio: z.string().trim().max(2000).optional(),
+  yearsOfExperience: z.coerce.number().int().min(0).max(70).optional(),
+  languages: z.array(z.string().trim().min(2).max(30)).max(10).optional(),
+  isAcceptingPatients: z.boolean().optional(),
+  videoConsultEnabled: z.boolean().optional(),
+  videoConsultFee: z.coerce.number().int().min(0).max(100_000).nullable().optional(),
+  avgWaitMinutes: z.coerce.number().int().min(0).max(240).optional(),
+});
+
+export const practiceSchema = z.object({
+  id: z.string().max(40).optional(),
+  hospitalId: z.string().min(1).max(40),
+  consultationFee: z.coerce.number().int().min(0).max(100_000),
+  followUpFee: z.coerce.number().int().min(0).max(100_000),
+  followUpValidDays: z.coerce.number().int().min(0).max(365),
+  slotDurationMinutes: z.coerce.number().int().min(5).max(120),
+  roomNumber: z.string().trim().max(30).optional(),
+  acceptsCashAtClinic: z.boolean(),
+  acceptsOnlinePayment: z.boolean(),
+  isActive: z.boolean(),
+});
+
+export const labResultUpdateSchema = z.object({
+  status: z.enum(["ORDERED", "SAMPLE_COLLECTED", "RESULT_READY", "CANCELLED"]).optional(),
+  resultText: z.string().trim().max(5000).optional(),
+});
+
+export const reviewReplySchema = z.string().trim().min(2).max(1000);
+
+export const shareDaysSchema = z.number().int().min(1).max(365).optional();
+
+export const refundAmountSchema = z.number().int().positive().optional();
 
 export type BookingInput = z.infer<typeof bookingSchema>;
 export type ConsultationFormInput = z.infer<typeof consultationSchema>;
