@@ -140,8 +140,33 @@ window forfeits the fee, everything else goes to `REFUND_PENDING`.
 - Zod 4 syntax (`z.email()`, `z.iso.datetime()`, `z.coerce.number()`).
 - Toasts come from `sonner`.
 
+## Pages
+
+| Area | Routes |
+| --- | --- |
+| Public | `/` · `/doctors` · `/doctors/[slug]` · `/doctors/[slug]/reviews` · `/hospitals` · `/hospitals/[slug]` · `/specialties` · `/apply` · `/onboarding` · `/privacy` · `/terms` |
+| Auth | `/login` · `/register` · `/forgot-password` · `/reset-password` |
+| Patient | `/dashboard` · `/appointments` · `/appointments/[id]` · `/records` · `/prescriptions` · `/prescriptions/[id]` · `/family` · `/notifications` · `/settings` · `/checkout/[appointmentId]` |
+| Doctor | `/doctor` · `/doctor/appointments` · `/doctor/appointments/[id]` · `/doctor/schedule` · `/doctor/patients` · `/doctor/patients/[patientId]` · `/doctor/reviews` · `/doctor/profile` |
+| Admin | `/admin` · `/admin/doctors` · `/admin/hospitals` · `/admin/specialties` · `/admin/appointments` · `/admin/payments` · `/admin/reviews` · `/admin/users` |
+| API | `/api/auth/*` · `/api/webhooks/payment` · `/api/cron/release-holds` · `/api/cron/reminders` · `/api/cron/follow-ups` |
+
 ## Status
 
-Build and typecheck are green. Payments run against a mock provider; JazzCash/EasyPaisa adapters
-and video consultations are stubbed at the interface but not implemented — see
-[`docs/ROADMAP.md`](docs/ROADMAP.md).
+| Feature | State |
+| --- | --- |
+| Doctor search, profiles, hospitals, specialties | ✅ Done |
+| Credentials + Google login, OTP, password reset | ✅ Done (SMS/email print to console in dev) |
+| Booking with double-booking protection, family members | ✅ Done |
+| Doctor portal — queue, schedule, consultation chart, reviews | ✅ Done |
+| Admin console — verification, catalogue, payments, moderation | ✅ Done |
+| Cron jobs — hold release, reminders, follow-ups | ✅ Done |
+| Payments | ⚠️ Mock checkout only — JazzCash / EasyPaisa / Stripe not wired |
+| Medical record uploads | ⚠️ URL field only — no S3/R2 upload pipeline |
+| Video consultations | ⚠️ Option shown in UI, no room provisioned |
+| Rate limiting (OTP, login, booking) | ❌ Missing |
+| Prisma migrations | ❌ Schema uses `db push`; no `prisma/migrations` yet |
+| Automated tests | ❌ None |
+| Urdu UI, real-time queue, hospital-scoped admin | ❌ Planned |
+
+Full, prioritised list: [`docs/ROADMAP.md`](docs/ROADMAP.md).
