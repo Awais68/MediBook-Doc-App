@@ -5,7 +5,7 @@ import { ROLE_HOME } from "@/lib/constants";
 
 const { auth } = NextAuth(authConfig);
 
-export default auth((req) => {
+export const proxy = auth((req) => {
   const { pathname, search } = req.nextUrl;
   const user = req.auth?.user;
   const guard = guardFor(pathname);

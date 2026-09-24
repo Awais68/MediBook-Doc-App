@@ -4,7 +4,7 @@
 
 ```
 Request
-  └─ middleware.ts            role guard from auth.config.ts ROUTE_GUARDS
+  └─ proxy.ts                 role guard from auth.config.ts ROUTE_GUARDS
       └─ layout / page        Server Component — reads via Prisma or a service
           └─ client component interactivity only; no data access
               └─ server action re-checks permission, calls a service, revalidates
@@ -19,8 +19,8 @@ auditable: every write path goes `action → requirePermission → service`.
 ## Auth
 
 `src/auth.config.ts` is the edge-safe half (providers list, callbacks, `ROUTE_GUARDS`).
-`src/auth.ts` is the Node half that touches Prisma and bcrypt. Middleware only imports the first,
-so the guard runs at the edge without pulling the Prisma client into that bundle.
+`src/auth.ts` is the Node half that touches Prisma and bcrypt. The proxy only imports the first,
+so the route guard stays light and never pulls the Prisma client into that bundle.
 
 Four ways in, all landing on the same JWT session:
 

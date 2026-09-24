@@ -89,7 +89,7 @@ src/
     session.ts     requireUser / requireRole / requirePermission / requireDoctor
   components/      ui primitives, shared, app, doctor-portal, admin, layout
   auth.config.ts   edge-safe auth config + ROUTE_GUARDS
-  middleware.ts    route protection
+  proxy.ts         route protection
 ```
 
 **Three rules the codebase holds to:**

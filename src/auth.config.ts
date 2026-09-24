@@ -3,7 +3,7 @@ import Google from "next-auth/providers/google";
 
 /**
  * Edge-safe half of the auth config. It must not import Prisma, bcrypt, or any
- * Node-only module, because `middleware.ts` builds a NextAuth instance from it.
+ * Node-only module, because `proxy.ts` builds a NextAuth instance from it.
  */
 
 /** Route prefix → roles allowed. First match wins. */
